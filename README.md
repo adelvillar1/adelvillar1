@@ -137,7 +137,7 @@ Most of what you need to answer interesting questions is already in the database
 
 | Dimension | Source | What it gives |
 |-----------|--------|---------------|
-| Identity | `cruisemapper_ports`, `ships`, `cruise_lines` | What things are |
+| Identity | `ports`, `ships`, `cruise_lines` | What things are |
 | Behavior | `port_ship_visits`, `ship_itineraries` | When/where things happen |
 | Demographics | `cruise_line_demographics` | Who the passengers are |
 | Environment | `port_weekly_weather/marine/air_quality` | Conditions at a place/time |
