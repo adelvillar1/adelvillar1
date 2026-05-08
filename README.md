@@ -60,20 +60,24 @@ PDF upload → pdfjs-dist extracts raw text fragments
 
 The spatial reorder is the part most people miss — two-column supplier invoices come back as interleaved garbage without it. Haiku vision alone can't fix bad text input; the reordering is what makes the extraction reliable. And it runs via `pdfjs-dist` subprocess for sandbox isolation so a bad PDF can't crash the server.
 
-### 4. Precomputed AI Chat Responses
+### 4. Precomputed AI Responses with Embedding Similarity
 
-40,000 AI chat responses are **prewarmed before anyone asks anything**. The AI Chat doesn't generate from scratch on every query:
+40,000 precomputed AI chat responses, but this isn't just a cache. It's a **three-tier lookup pipeline** that finds the right answer even when the user words the question differently:
 
 ```
-Query → Regex classifier (zero cost, instant)
-      → Redis cache hit  → instant response ($0.00)
-      → PG cache hit     → write-through to Redis, return ($0.00)
-      → Both miss        → live DeepSeek synthesis, persist to both ($0.003)
+Query → Tier 1: Exact cache key (hash match on Redis → PG)
+      → Tier 2: Embedding similarity (OpenAI text-embedding-3-small, 1536d)
+      → Tier 3: Haiku semantic dedup (top-3 embedding candidates → "does any match?")
+      → All miss: Live DeepSeek synthesis, persist to cache
 ```
 
-Three dedicated prewarm scripts (v2 → v3 → v4, 4–5h total on Max tier) seed the cache with responses for ships, cruise lines, rankings, regions, ports, comparisons, and corridor intelligence. The blended cost lands at ~$0.003/query — **97% cheaper** than running every query through a single Sonnet call.
+**Tier 1** is the standard key-value cache. **Tier 2** loads all 40K embeddings into an in-memory Float32Array (~245 MB) and finds semantically similar queries with cosine similarity — so "what's the best ship for Alaska in June" matches a cached answer about "top Alaska cruises summer season" even though the wording is different.
 
-Every cache hit bumps `hitCount` and `lastHitAt`, enabling "regenerate top misses" jobs that improve the corpus over time without manual curation.
+**Tier 3** passes the top-3 embedding candidates to Haiku and asks, in zero tokens of reasoning, "does any of these three answers actually respond to the user's question?" This catches the gap where embedding similarity is high but the answer doesn't address the specific ask.
+
+And the precomputed responses aren't generic filler — they're **data-grounded**. The prewarm scripts (v2 → v3 → v4, 4–5h on Max tier) iterate every ship, cruise line, corridor, destination, and port in PostgreSQL, pull their factual data, and generate responses anchored to real records. The `source='template'` seeds get batch-overwritten by `source='deepseek'` with richer narration, but every response traces back to live DB data.
+
+The blended cost: **~$0.003/query** — 97% cheaper than naive single-model synthesis, plus the embedding layer means users get human-quality answers without the human-cost latency.
 
 ### 5. Bulk AI — Batch Precompute at Flat-Rate
 
