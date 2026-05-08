@@ -165,6 +165,39 @@ The health endpoint has a blind spot — trigger-based scraping runs entirely ou
 
 ---
 
+## 🧠 How I Keep It All in My Head: 154 Reusable Skills
+
+Every non-trivial pattern I discover gets saved as a **Hermes skill** — a structured markdown file with frontmatter, triggers, numbered steps, pitfalls, and references. When I start a session, the relevant skills auto-load alongside my project context. I never re-derive a pattern I've already solved.
+
+**154 skills** across 26 categories. The most heavily authored:
+
+| Category | Skills | What they cover |
+|----------|--------|-----------------|
+| **software-development** | 51 | Dual-emit LLM, cache matching, Prisma soft-delete, pipeline orchestration, route-map SVGs, project methodology, batch UX, skill authoring |
+| **creative** | 26 | ASCII video, brand asset extraction, design review, hyperframes, pixel art, slide decks, music generation |
+| **devops** | 18 | Pipeline orchestration, inference arbitrage, cross-env data comparison, FalkorDB projection, scraper instrumentation, knowledge graph, postgres migrations |
+| **mlops** | 14 | Model serving (vLLM), fine-tuning (Axolotl, TRL, Unsloth), evaluation, audio generation, image segmentation, DSPy |
+| **github** | 6 | PR workflow, code review, issues, repo management, auth, codebase inspection |
+| **autonomous-ai-agents** | 4 | Claude Code, Codex, OpenCode delegation, Hermes Agent configuration |
+| **research** | 5 | arXiv, blog monitoring, Polymarket, LLM wiki, research writing |
+
+### The patterns that recur most
+
+| Pattern | Used in | Why it's repeatable |
+|---------|---------|---------------------|
+| **Dual-emit LLM** | CI (all 1.7M insights), TTESS (T-PESS) | One call produces structured columns + narration simultaneously |
+| **Domain-chunked AI** | TTESS (T-TESS 16 dims), CI (T-PESS projections) | Split when 8+ fields, concurrent scoped calls, baseline stamp |
+| **Multi-tier cache** | CI AI Chat (40K responses) | Entity keys → embeddings (1536d) → Haiku dedup → live synthesis |
+| **Pipeline orchestrator** | CI (47 steps), any sequential job chain | DB-backed state machine, pause/resume/cancel/restart |
+| **Prisma soft-delete** | Trip Ledger, TTESS, CI | One `$extends` interceptor — zero leaky abstractions |
+| **Inference arbitrage** | All projects globally | 4 providers, flat-rate bulk, per-task routing |
+| **Project knowledge graph** | All projects (6,528 indexed chunks) | Local FalkorDB, TF-IDF ranking, no LLM API costs |
+| **Slim project methodology** | All 8 projects | warmup → plan → build → recap → wrapup cycle |
+
+Each skill includes versioning, trigger conditions, and a pitfalls section. The project knowledge graph indexes all of them across every project — I can query "how did we do X before?" and get the matching skill, relevant recaps, and architecture docs in one result set.
+
+---
+
 ## 🚀 What I'm Building
 
 ### [Cruising Intelligence](https://cruisingintelligence.com) · [`cruise-intelligence`](https://github.com/adelvillar1/cruise-intelligence)
