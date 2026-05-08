@@ -25,7 +25,7 @@ I build **B2B SaaS products** — full-stack, solo-founder, production at scale.
 - **Soft-delete everywhere** — Prisma `$extends` middleware intercepting all queries, zero hard-deletes in the codebase
 - **Stack**: Next.js · TypeScript · PostgreSQL · Prisma · Tailwind CSS
 
-### [TTESS](https://ttess-app-production.up.railway.app) · [`TTESS`](https://github.com/adelvillar1/TTESS)
+### TTESS · [`TTESS`](https://github.com/adelvillar1/TTESS)
 **Teacher evaluation management** — T-TESS (16 dimensions) and T-PESS (5 domains) with AI-generated analysis reports.
 
 - **Domain-chunked LLM generation** — parallel AI calls per evaluation dimension, producing structured `.docx` reports with evidence tables, executive summaries, and growth plans
