@@ -8,101 +8,102 @@ I build **B2B SaaS products** — full-stack, solo-founder, production at scale.
 
 | What | Count | Why it matters |
 |------|-------|----------------|
-| Ships tracked | **687** active, with full cabin maps, dining venues, and bar inventories | Every travel advisor needs ship-level detail instantly |
-| Cruise itineraries | **86,000** active (~67K with future sailings) | Matched to ships, ports, seasons, and traveler profiles |
-| Port visits indexed | **630,000+** ship-port pairs | Every ship, every port, every sail date |
-| Route corridors | **16,000+** unique sea routes | The atomic unit of cruise intelligence — a specific ship on a specific route in a specific season |
-| Ports with deep data | **2,377** — weather, marine conditions, air quality, cost indices | Full destination intelligence, not just coordinates |
-| FalkorDB graph nodes | ~**25,000** across 9 node types | Ships, ports, routes, clans, amenities, guest profiles — all connected |
-| AI Chat responses | **40,000** prewarmed in PG+Redis cache | ~$0.003/query blended, instant response, no LLM call needed |
-| Pipeline steps orchestrated | **47** across 10 phases | Runs without human intervention after the scraper finishes |
-| LLM inference done | **1.7M** calls | …
-
-For **$100** flat-rate (Ollama Cloud). Would have cost **~$280K** on per-token pricing. That's **2,800x cheaper** — and every insight shipped to production.
+| Ships tracked | **687** active | Full cabin maps, dining venues, bar inventories — advisor-ready |
+| Cruise itineraries | **86,000** active (~67K with future sailings) | Matched to ships, ports, seasons, traveler profiles |
+| Route corridors | **16,000+** unique sea routes | The atomic intelligence unit: a specific ship × route × season |
+| Ports with deep data | **2,377** — weather, marine conditions, air quality, cost indices | Full destination intelligence, not coordinates on a map |
+| Port ship visits | **630,000+** | Every ship, every port, every sail date |
+| FalkorDB graph | ~**25,000** nodes (9 types) + **1,010** CABIN_FIT edges | Ships, ports, clans, amenities, guest profiles — all traversable by Cypher |
+| AI Chat responses | **40,000** precomputed, cached in PG+Redis | ~$0.003/query blended — instant, no LLM call on cache hit |
+| Pipeline steps | **47** across 10 phases, 36 unique scripts | Runs without human intervention after the scraper finishes |
+| LLM inferences | **1.7M** corridor insights generated | For **$100** flat-rate (Ollama Cloud) — would cost **~$280K** on per-token pricing |
 
 ---
 
-## ⚡ What Most People Haven't Done
+## ⚡ The AI Patterns (Most People Haven't Done This)
 
-### Inference Arbitrage — Not Just "Use Cheap Models"
+### 1. Seven-Tier Structured AI Pipeline (T1–T7)
 
-I run a **multi-tier model routing strategy** across 4 providers. Every task gets matched to the cheapest adequate model — not averaged, not guessed, not sticking to one provider:
+Precomputing AI narration is one thing. What I built is a **tiered insight hierarchy** — seven distinct types of AI-generated intelligence, each targeting a different question travel advisors actually ask, all running as a batch pipeline after every scraper cycle:
 
-| Tier | Model | Provider | Cost structure |
-|------|-------|----------|----------------|
-| Fast chat + compression | DeepSeek V4 Flash | DeepSeek API | ~$0.15/M tokens, 1M context |
-| Reasoning + subagents | Kimi K2.6 | Kimi/Moonshot | Token-based (cheap) |
-| **Bulk inference** | 7+ models (GLM-5, Gemma 4:31b, Nemotron, etc.) | **Ollama Cloud flat-rate** | **~$100/mo unlimited** |
+| Tier | What it answers | How it works |
+|------|----------------|--------------|
+| **T1 — Best Fit** | "Which traveler types love this route?" | Per-corridor × persona × season: luxury, couples, solo, families, adventure, budget |
+| **T2 — Upgrade Paths** | "Where's the value sweet spot?" | Compares price vs experience across similar corridors |
+| **T3 — Capacity** | "Is this sailing likely to sell out?" | Historical crowd patterns, seasonal peaks |
+| **T4 — Family Variation** | "How do sister ships differ on this route?" | Within-family corridor comparisons |
+| **T5 — Risk Flags** | "What should I warn my client about?" | Hurricane windows, wave heights, port instability, cost spikes |
+| **T6 — Ship × Corridor Fit** | "Which specific ship is best for this route?" | Per-ship-per-corridor joint fit analysis, the recommendation atom |
+| **T7 — Line Personality** | "What's this cruise line's vibe?" | Archetype, defining traits, seasonal mode (e.g., "luxury class, Mediterranean summers, Alaska novelty") |
 
-The 1.7M insight precompute that cost $100 on Ollama Cloud flat-rate would have been $280K on DeepSeek or OpenAI. Most people don't even know Ollama Cloud exists. Most people don't think in terms of pricing-model arbitrage.
+Every tier runs post-pipeline. Every result is precomputed — not generated at query time. The advisor clicks a badge and gets instant, persona-steered narration. **1.7M cells generated**, delivered at Redis speed.
 
-### FalkorDB — A Graph Database That Speaks Redis Protocol
+### 2. Domain-Chunked AI Generation
 
-Instead of using a vector database, Neo4j, or traditional SQL for the knowledge graph, I use **FalkorDB** — an in-memory graph database that speaks the Redis wire protocol. This means:
+Instead of throwing an entire T-TESS evaluation (16 dimensions) at an LLM in one call — which produces shallow, generic narratives — I split it into **4 concurrent domain-scoped calls** (one per T-TESS domain). Each call handles 4–5 dimensions against a focused prompt. Results merge into one coherent analysis.
 
-- Every existing Redis client library works with it (no new drivers)
-- Cypher queries for graph traversal (16K route corridors → 57 clans → 24 regions)
-- Full Redis commands still work (BGSAVE, replication, TTL)
-- **200MB idle** — runs comfortably on a $5/month Railway service
-- Replication via **RDB binary copy**: BGSAVE → SCP the dump → RESTORE on production
+Then the **baseline stamp** kicks in: wherever vision-extracted ratings exist, they **deterministically overwrite** the model's inferred rating. The discrepancy is logged: `[chunked] baseline stamp X.X: model=Y → extracted=Z`. The model's guess at a rating is literally discarded wherever real data exists.
 
-The replication trick alone took 3 failed approaches before finding this — DUMP/RESTORE doesn't work with FalkorDB's `graphdata` key type, and streaming script-based replication is too slow for 25K nodes.
+Same pattern for T-PESS (5 domains, 23 indicators) — but that's 5 parallel calls, 3-element justification pattern per indicator, one comprehensive `.docx` report with cover page, evidence table, executive summary, artifact table, growth plan, and overall assessment.
 
-### Prisma Soft-Delete Middleware (That Actually Works)
+### 3. AI Vision Extraction, Not Chat
 
-Not "add `deletedAt` to every model and remember to filter." A **single `$extends` interceptor** that:
-
-```
-findMany → auto-appends WHERE deleted_at IS NULL
-delete   → transparently converts to UPDATE SET deleted_at = NOW()
-Models without deleted_at → whitelisted in a config set → throws before the query hits the DB
-```
-
-One-time setup. Zero leaky abstractions. Every team member forgets soft-delete exists — and that's the point.
-
-### Dual-Emit LLM Generation
-
-One LLM call produces **two outputs simultaneously**: structured JSON columns (enums, arrays, booleans) and natural-language narration. The model emits `{"narration": "...", "bestFitPersona": "luxury", "riskFlags": ["weather", "capacity"] ...}` — both the queryable database column and the human-facing text in a single inference. No second pass, no hallucination drift between structured and unstructured outputs.
-
-### Scraper Worker: From 9GB to 200MB Memory
-
-A single Playwright browser for all scraper jobs consumed **9GB+ of RAM** and OOM-killed the service weekly. The fix: **kill the browser after every port**. Spawn Playwright → scrape port → close → spawn again. Per-port lifecycle instead of singleton. Dropped memory to ~200MB. Zero OOMs since.
-
-### PDF Extraction: Spatial Text Reordering
-
-Standard PDF text extraction reads left-to-right, top-to-bottom. Two-column supplier invoices come back as interleaved garbage. The fix: extract every text fragment with its bounding box, **group by Y coordinate** (same row = same Y), **sort by X** within each row, then concatenate rows top-to-bottom. Runs via `pdfjs-dist` subprocess for sandbox isolation. Haiku 4.5 vision then extracts structured fields from the reordered text.
-
-### Route Map SVGs from Raw Map Data
-
-No Google Maps API, no Mapbox subscription, no OSM tiles. I download **Natural Earth 10m coastline vectors**, run them through a custom SVG pipeline, and generate route-map SVGs server-side at +40ms each. PG caches them. Redis serves them. Zero API cost per map. Batch prewarm script generates all 16K corridor maps on deploy.
-
-### A 47-Step Pipeline That Manages Itself
-
-The post-scraper pipeline has **10 phases, 47 steps, 36 unique scripts** — corridor computation, enrichment, insight generation, graph projection, production sync. Each script default to incremental (new/changed-only, `--force` for full runs). A **DB-backed orchestrator** (`lib/pipeline-jobs/auto-advance.ts`) manages the lifecycle:
+PDF booking confirmations arrive in every possible format — one-column, two-column, tables, prose blocks, multi-page. Standard text extraction leaves all the structure on the floor. Here's the actual pipeline:
 
 ```
-start → execute step → advance to next → handle failures → pause/resume → cancel/restart
+PDF upload → pdfjs-dist extracts raw text fragments
+           → Spatial reorder: group by Y coordinate, sort by X
+           → @napi-rs/canvas renders pages as images
+           → Haiku 4.5 vision extracts booking number, price, commission, dates
+           → Returns structured JSON → creates booking record
 ```
 
-Every step shows output, duration, error. The pipeline logs JSONL events to a `pipeline_runs.log` column with auto-trim to 500 lines. A step detail panel in the admin UI lets you click any step and see exactly what happened.
+The spatial reorder is the part most people miss — two-column supplier invoices come back as interleaved garbage without it. Haiku vision alone can't fix bad text input; the reordering is what makes the extraction reliable. And it runs via `pdfjs-dist` subprocess for sandbox isolation so a bad PDF can't crash the server.
 
-**All 36 scripts were audited for schema drift** — every raw SQL column verified against `@map` decorators, every Prisma `data:` field verified against model scalars. Two bugs found. Zero additional drift.
+### 4. Precomputed AI Chat Responses
+
+40,000 AI chat responses are **prewarmed before anyone asks anything**. The AI Chat doesn't generate from scratch on every query:
+
+```
+Query → Regex classifier (zero cost, instant)
+      → Redis cache hit  → instant response ($0.00)
+      → PG cache hit     → write-through to Redis, return ($0.00)
+      → Both miss        → live DeepSeek synthesis, persist to both ($0.003)
+```
+
+Three dedicated prewarm scripts (v2 → v3 → v4, 4–5h total on Max tier) seed the cache with responses for ships, cruise lines, rankings, regions, ports, comparisons, and corridor intelligence. The blended cost lands at ~$0.003/query — **97% cheaper** than running every query through a single Sonnet call.
+
+Every cache hit bumps `hitCount` and `lastHitAt`, enabling "regenerate top misses" jobs that improve the corpus over time without manual curation.
+
+### 5. Bulk AI — Batch Precompute at Flat-Rate
+
+**1.7 million** corridor insight cells. Each one is an LLM call (prompt + corridor record + persona + season). Running them through a per-token API would cost **~$280K**.
+
+Instead, I route the entire batch job through **Ollama Cloud flat-rate ($100/month unlimited)**. The bulk tier handles 7+ different models (GLM-5, Gemma 4:31b, Nemotron 30b, MiniMax M2.7, etc.) — whatever fits the task. 1.7M inferences for $100. That's a **2,800x cost advantage** from one routing decision.
+
+This isn't theoretical — it's shipped. Every one of those 1.7M cells is live on cruisingintelligence.com, served to travel advisors daily.
 
 ---
 
 ## 🚀 What I'm Building
 
 ### [Cruising Intelligence](https://cruisingintelligence.com) · [`cruise-intelligence`](https://github.com/adelvillar1/cruise-intelligence)
-The engine behind everything above. B2B SaaS for travel advisors. AI Chat with 40 tools, persona-based insights, route maps, FalkorDB knowledge graph, automated pipeline. Next.js · TypeScript · PostgreSQL · Prisma · FalkorDB · Redis · Ollama Cloud
+The engine behind all the AI patterns above. B2B SaaS for travel advisors. FalkorDB knowledge graph, 47-step automated pipeline, persona-based insights on every surface, route map SVGs from raw coastline data.
+
+**Stack**: Next.js · TypeScript · PostgreSQL · Prisma · FalkorDB · Redis · Ollama Cloud · DeepSeek
 
 ### [Trip Ledger](https://thetripledger.com) · [`commissiontracker`](https://github.com/adelvillar1/commissiontracker)
-Multi-agency platform for travel agencies — bookings, supplier commission reconciliation, payroll. AI vision PDF extraction with spatial text reordering. Multi-tenant row-level security. Soft-delete everywhere. Next.js · TypeScript · PostgreSQL · Prisma
+Multi-agency platform for travel agencies — bookings, supplier commission reconciliation, agent payroll. AI vision PDF extraction with spatial text reordering. Multi-tenant row-level security. Soft-delete everywhere.
+
+**Stack**: Next.js · TypeScript · PostgreSQL · Prisma · Tailwind CSS
 
 ### TTESS · [`TTESS`](https://github.com/adelvillar1/TTESS)
-Teacher evaluation management — T-TESS (16 dimensions) and T-PESS (5 domains). Domain-chunked parallel LLM generation producing `.docx` reports with evidence tables, executive summaries, growth plans. Baseline stamp: where vision data exists, the model's inferred rating is discarded. Next.js · TypeScript · PostgreSQL · Prisma · Ollama Cloud
+Teacher evaluation management — T-TESS (16 dimensions) and T-PESS (5 domains). Domain-chunked parallel LLM generation with baseline stamp. Produces `.docx` reports with evidence tables, executive summaries, and growth plans.
+
+**Stack**: Next.js · TypeScript · PostgreSQL · Prisma · Ollama Cloud
 
 ### [Cruiser Intelligence](https://github.com/adelvillar1/cruiserintelligence)
-Consumer cruise mobile app (React Native, iOS + Android). 14-endpoint API on the CI data engine. 7 screens, quiz flow, climate conditions, upsell widgets.
+Consumer cruise mobile app (React Native, iOS + Android). 14-endpoint API on the CI data engine. Quiz flow, climate conditions, upsell widgets.
 
 ### [Beacon](https://github.com/adelvillar1/beacon)
 Resource Allocation & Workstream Planning Dashboard. Python/FastAPI.
@@ -112,13 +113,18 @@ Multi-tenant school pickup/dropoff queue management. WebSocket real-time updates
 
 ---
 
-## 🛠 The Toolchain Behind the Patterns
+## 🛠 The Infrastructure Behind the Patterns
 
-**Languages:** TypeScript (primary), Python (scripts, FastAPI), SQL (Postgres, FalkorDB Cypher), React Native  
-**Infrastructure:** Railway (10+ services), Docker, Natural Earth (10m coastline data)  
-**Database:** PostgreSQL (2M+ records), FalkorDB (25K graph nodes), Redis (40K prewarmed cache entries)  
-**AI:** DeepSeek V4 Flash, Kimi K2.6, Ollama Cloud (flat-rate bulk), Haiku 4.5 (vision), Gemini 2.5  
-**Testing:** Vitest, Playwright (E2E + scraper), Pytest
+| Layer | What | Why |
+|-------|------|-----|
+| **Orchestration** | DB-backed auto-advancing pipeline, 47 steps, event log (JSONL), step-level triage | Pipeline runs without babysitting |
+| **Cache** | PG = source of truth, Redis = speed cache, 2-layer read-through | Redis flush doesn't destroy the corpus |
+| **Graph** | FalkorDB (in-memory graph, speaks Redis protocol). 25K nodes, Cypher queries | No new drivers, no vector DB, no Neo4j bill |
+| **Replication** | RDB binary copy (BGSAVE → SCP → RESTORE) | DUMP/RESTORE fails on graphdata key types |
+| **Scraper** | Per-port Playwright lifecycle, 9GB → 200MB memory | Weekly OOM kills are a solved problem |
+| **Cache warm** | 4 dedicated prewarm scripts, 40K+ responses seeded before first user query | Users never wait for an LLM |
+| **Cost strategy** | 4-provider model routing, flat-rate bulk tier, 2,800x arbitrage advantage | $100 does what $280K would |
+| **Schema integrity** | All 36 pipeline scripts audited against Prisma schema, column names verified against `@map` | Zero drift between scripts and models |
 
 ---
 
